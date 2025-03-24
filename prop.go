@@ -10,6 +10,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/gofiber/fiber/v3"
 	"io"
 	"mime"
 	"net/http"
@@ -64,7 +65,7 @@ func makePropstats(x, y Propstat) []Propstat {
 	}
 	if len(pstats) == 0 {
 		pstats = append(pstats, Propstat{
-			Status: http.StatusOK,
+			Status: fiber.StatusOK,
 		})
 	}
 	return pstats
@@ -186,8 +187,8 @@ func props(ctx context.Context, fs FileSystem, ls LockSystem, name string, pname
 		}
 	}
 
-	pstatOK := Propstat{Status: http.StatusOK}
-	pstatNotFound := Propstat{Status: http.StatusNotFound}
+	pstatOK := Propstat{Status: fiber.StatusOK}
+	pstatNotFound := Propstat{Status: fiber.StatusNotFound}
 	for _, pn := range pnames {
 		// If this file has dead properties, check if they contain pn.
 		if dp, ok := deadProps[pn]; ok {
@@ -287,7 +288,7 @@ loop:
 	}
 	if conflict {
 		pstatForbidden := Propstat{
-			Status:   http.StatusForbidden,
+			Status:   fiber.StatusForbidden,
 			XMLError: `<D:cannot-modify-protected-property xmlns:D="DAV:"/>`,
 		}
 		pstatFailedDep := Propstat{
@@ -327,7 +328,7 @@ loop:
 	}
 	// The file doesn't implement the optional DeadPropsHolder interface, so
 	// all patches are forbidden.
-	pstat := Propstat{Status: http.StatusForbidden}
+	pstat := Propstat{Status: fiber.StatusForbidden}
 	for _, patch := range patches {
 		for _, p := range patch.Props {
 			pstat.Props = append(pstat.Props, Property{XMLName: p.XMLName})

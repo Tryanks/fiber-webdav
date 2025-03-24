@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gofiber/fiber/v3"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -93,10 +94,10 @@ func TestPrefix(t *testing.T) {
 		// /a/b/e/f and /a/b/e/g, plus their parent directories.
 
 		wantA := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusMovedPermanently,
-			"/a/b/":   http.StatusNotFound,
-			"/a/b/c/": http.StatusNotFound,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusMovedPermanently,
+			"/a/b/":   fiber.StatusNotFound,
+			"/a/b/c/": fiber.StatusNotFound,
 		}[prefix]
 		if _, err := do("MKCOL", srv.URL+"/a", "", wantA); err != nil {
 			t.Errorf("prefix=%-9q MKCOL /a: %v", prefix, err)
@@ -104,10 +105,10 @@ func TestPrefix(t *testing.T) {
 		}
 
 		wantB := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusCreated,
-			"/a/b/":   http.StatusMovedPermanently,
-			"/a/b/c/": http.StatusNotFound,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusCreated,
+			"/a/b/":   fiber.StatusMovedPermanently,
+			"/a/b/c/": fiber.StatusNotFound,
 		}[prefix]
 		if _, err := do("MKCOL", srv.URL+"/a/b", "", wantB); err != nil {
 			t.Errorf("prefix=%-9q MKCOL /a/b: %v", prefix, err)
@@ -115,10 +116,10 @@ func TestPrefix(t *testing.T) {
 		}
 
 		wantC := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusCreated,
-			"/a/b/":   http.StatusCreated,
-			"/a/b/c/": http.StatusMovedPermanently,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusCreated,
+			"/a/b/":   fiber.StatusCreated,
+			"/a/b/c/": fiber.StatusMovedPermanently,
 		}[prefix]
 		if _, err := do("PUT", srv.URL+"/a/b/c", blah, wantC); err != nil {
 			t.Errorf("prefix=%-9q PUT /a/b/c: %v", prefix, err)
@@ -126,10 +127,10 @@ func TestPrefix(t *testing.T) {
 		}
 
 		wantD := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusCreated,
-			"/a/b/":   http.StatusCreated,
-			"/a/b/c/": http.StatusMovedPermanently,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusCreated,
+			"/a/b/":   fiber.StatusCreated,
+			"/a/b/c/": fiber.StatusMovedPermanently,
 		}[prefix]
 		if _, err := do("COPY", srv.URL+"/a/b/c", "", wantD, dst, srv.URL+"/a/b/d"); err != nil {
 			t.Errorf("prefix=%-9q COPY /a/b/c /a/b/d: %v", prefix, err)
@@ -137,10 +138,10 @@ func TestPrefix(t *testing.T) {
 		}
 
 		wantE := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusCreated,
-			"/a/b/":   http.StatusCreated,
-			"/a/b/c/": http.StatusNotFound,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusCreated,
+			"/a/b/":   fiber.StatusCreated,
+			"/a/b/c/": fiber.StatusNotFound,
 		}[prefix]
 		if _, err := do("MKCOL", srv.URL+"/a/b/e", "", wantE); err != nil {
 			t.Errorf("prefix=%-9q MKCOL /a/b/e: %v", prefix, err)
@@ -148,10 +149,10 @@ func TestPrefix(t *testing.T) {
 		}
 
 		wantF := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusCreated,
-			"/a/b/":   http.StatusCreated,
-			"/a/b/c/": http.StatusNotFound,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusCreated,
+			"/a/b/":   fiber.StatusCreated,
+			"/a/b/c/": fiber.StatusNotFound,
 		}[prefix]
 		if _, err := do("MOVE", srv.URL+"/a/b/d", "", wantF, dst, srv.URL+"/a/b/e/f"); err != nil {
 			t.Errorf("prefix=%-9q MOVE /a/b/d /a/b/e/f: %v", prefix, err)
@@ -160,10 +161,10 @@ func TestPrefix(t *testing.T) {
 
 		var lockToken string
 		wantG := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusCreated,
-			"/a/b/":   http.StatusCreated,
-			"/a/b/c/": http.StatusNotFound,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusCreated,
+			"/a/b/":   fiber.StatusCreated,
+			"/a/b/c/": fiber.StatusNotFound,
 		}[prefix]
 		if h, err := do("LOCK", srv.URL+"/a/b/e/g", createLockBody, wantG); err != nil {
 			t.Errorf("prefix=%-9q LOCK /a/b/e/g: %v", prefix, err)
@@ -174,10 +175,10 @@ func TestPrefix(t *testing.T) {
 
 		ifHeader := fmt.Sprintf("<%s/a/b/e/g> (%s)", srv.URL, lockToken)
 		wantH := map[string]int{
-			"/":       http.StatusCreated,
-			"/a/":     http.StatusCreated,
-			"/a/b/":   http.StatusCreated,
-			"/a/b/c/": http.StatusNotFound,
+			"/":       fiber.StatusCreated,
+			"/a/":     fiber.StatusCreated,
+			"/a/b/":   fiber.StatusCreated,
+			"/a/b/c/": fiber.StatusNotFound,
 		}[prefix]
 		if _, err := do("PUT", srv.URL+"/a/b/e/g", blah, wantH, "If", ifHeader); err != nil {
 			t.Errorf("prefix=%-9q PUT /a/b/e/g: %v", prefix, err)
@@ -375,23 +376,23 @@ func TestPutRequest(t *testing.T) {
 	}{{
 		name:      "put",
 		urlPrefix: "/res",
-		want:      http.StatusCreated,
+		want:      fiber.StatusCreated,
 	}, {
 		name:      "put_utf8_segment",
 		urlPrefix: "/res-%e2%82%ac",
-		want:      http.StatusCreated,
+		want:      fiber.StatusCreated,
 	}, {
 		name:      "put_empty_segment",
 		urlPrefix: "",
-		want:      http.StatusNotFound,
+		want:      fiber.StatusNotFound,
 	}, {
 		name:      "put_root_segment",
 		urlPrefix: "/",
-		want:      http.StatusNotFound,
+		want:      fiber.StatusNotFound,
 	}, {
 		name:      "put_no_parent [RFC4918:S9.7.1]",
 		urlPrefix: "/409me/noparent.txt",
-		want:      http.StatusConflict,
+		want:      fiber.StatusConflict,
 	}}
 
 	for _, tc := range testCases {

@@ -7,8 +7,9 @@ package webdav
 import (
 	"context"
 	"encoding/xml"
+	"github.com/gofiber/fiber/v3"
 	"io"
-	"net/http"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -51,8 +52,10 @@ type FileSystem interface {
 // A File may optionally implement the DeadPropsHolder interface, if it can
 // load and save dead properties.
 type File interface {
-	http.File
-	io.Writer
+	io.ReadWriteSeeker
+	io.Closer
+	Readdir(count int) ([]fs.FileInfo, error)
+	Stat() (fs.FileInfo, error)
 }
 
 // A Dir implements FileSystem using the native file system restricted to a
@@ -448,7 +451,7 @@ func (n *memFSNode) DeadProps() (map[xml.Name]Property, error) {
 func (n *memFSNode) Patch(patches []Proppatch) ([]Propstat, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	pstat := Propstat{Status: http.StatusOK}
+	pstat := Propstat{Status: fiber.StatusOK}
 	for _, patch := range patches {
 		for _, p := range patch.Props {
 			pstat.Props = append(pstat.Props, Property{XMLName: p.XMLName})
@@ -612,7 +615,7 @@ func moveFiles(ctx context.Context, fs FileSystem, src, dst string, overwrite bo
 	created := false
 	if _, err := fs.Stat(ctx, dst); err != nil {
 		if !os.IsNotExist(err) {
-			return http.StatusForbidden, err
+			return fiber.StatusForbidden, err
 		}
 		created = true
 	} else if overwrite {
@@ -621,18 +624,18 @@ func moveFiles(ctx context.Context, fs FileSystem, src, dst string, overwrite bo
 		// the server must perform a DELETE with "Depth: infinity" on the
 		// destination resource.
 		if err := fs.RemoveAll(ctx, dst); err != nil {
-			return http.StatusForbidden, err
+			return fiber.StatusForbidden, err
 		}
 	} else {
-		return http.StatusPreconditionFailed, os.ErrExist
+		return fiber.StatusPreconditionFailed, os.ErrExist
 	}
 	if err := fs.Rename(ctx, src, dst); err != nil {
-		return http.StatusForbidden, err
+		return fiber.StatusForbidden, err
 	}
 	if created {
-		return http.StatusCreated, nil
+		return fiber.StatusCreated, nil
 	}
-	return http.StatusNoContent, nil
+	return fiber.StatusNoContent, nil
 }
 
 func copyProps(dst, src File) error {
@@ -661,7 +664,7 @@ func copyProps(dst, src File) error {
 // See section 9.8.5 for when various HTTP status codes apply.
 func copyFiles(ctx context.Context, fs FileSystem, src, dst string, overwrite bool, depth int, recursion int) (status int, err error) {
 	if recursion == 1000 {
-		return http.StatusInternalServerError, errRecursionTooDeep
+		return fiber.StatusInternalServerError, errRecursionTooDeep
 	}
 	recursion++
 
@@ -671,17 +674,17 @@ func copyFiles(ctx context.Context, fs FileSystem, src, dst string, overwrite bo
 	srcFile, err := fs.OpenFile(ctx, src, os.O_RDONLY, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return http.StatusNotFound, err
+			return fiber.StatusNotFound, err
 		}
-		return http.StatusInternalServerError, err
+		return fiber.StatusInternalServerError, err
 	}
 	defer srcFile.Close()
 	srcStat, err := srcFile.Stat()
 	if err != nil {
 		if os.IsNotExist(err) {
-			return http.StatusNotFound, err
+			return fiber.StatusNotFound, err
 		}
-		return http.StatusInternalServerError, err
+		return fiber.StatusInternalServerError, err
 	}
 	srcPerm := srcStat.Mode() & os.ModePerm
 
@@ -690,25 +693,25 @@ func copyFiles(ctx context.Context, fs FileSystem, src, dst string, overwrite bo
 		if os.IsNotExist(err) {
 			created = true
 		} else {
-			return http.StatusForbidden, err
+			return fiber.StatusForbidden, err
 		}
 	} else {
 		if !overwrite {
-			return http.StatusPreconditionFailed, os.ErrExist
+			return fiber.StatusPreconditionFailed, os.ErrExist
 		}
 		if err := fs.RemoveAll(ctx, dst); err != nil && !os.IsNotExist(err) {
-			return http.StatusForbidden, err
+			return fiber.StatusForbidden, err
 		}
 	}
 
 	if srcStat.IsDir() {
 		if err := fs.Mkdir(ctx, dst, srcPerm); err != nil {
-			return http.StatusForbidden, err
+			return fiber.StatusForbidden, err
 		}
 		if depth == infiniteDepth {
 			children, err := srcFile.Readdir(-1)
 			if err != nil {
-				return http.StatusForbidden, err
+				return fiber.StatusForbidden, err
 			}
 			for _, c := range children {
 				name := c.Name()
@@ -726,29 +729,29 @@ func copyFiles(ctx context.Context, fs FileSystem, src, dst string, overwrite bo
 		dstFile, err := fs.OpenFile(ctx, dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, srcPerm)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return http.StatusConflict, err
+				return fiber.StatusConflict, err
 			}
-			return http.StatusForbidden, err
+			return fiber.StatusForbidden, err
 
 		}
 		_, copyErr := io.Copy(dstFile, srcFile)
 		propsErr := copyProps(dstFile, srcFile)
 		closeErr := dstFile.Close()
 		if copyErr != nil {
-			return http.StatusInternalServerError, copyErr
+			return fiber.StatusInternalServerError, copyErr
 		}
 		if propsErr != nil {
-			return http.StatusInternalServerError, propsErr
+			return fiber.StatusInternalServerError, propsErr
 		}
 		if closeErr != nil {
-			return http.StatusInternalServerError, closeErr
+			return fiber.StatusInternalServerError, closeErr
 		}
 	}
 
 	if created {
-		return http.StatusCreated, nil
+		return fiber.StatusCreated, nil
 	}
-	return http.StatusNoContent, nil
+	return fiber.StatusNoContent, nil
 }
 
 // walkFS traverses filesystem fs starting at name up to depth levels.

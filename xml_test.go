@@ -8,8 +8,8 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"github.com/gofiber/fiber/v3"
 	"io"
-	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sort"
@@ -31,7 +31,7 @@ func TestReadLockInfo(t *testing.T) {
 		"bad: junk",
 		"xxx",
 		lockInfo{},
-		http.StatusBadRequest,
+		fiber.StatusBadRequest,
 	}, {
 		"bad: invalid owner XML",
 		"" +
@@ -43,7 +43,7 @@ func TestReadLockInfo(t *testing.T) {
 			"  </D:owner>\n" +
 			"</D:lockinfo>",
 		lockInfo{},
-		http.StatusBadRequest,
+		fiber.StatusBadRequest,
 	}, {
 		"bad: invalid UTF-8",
 		"" +
@@ -55,7 +55,7 @@ func TestReadLockInfo(t *testing.T) {
 			"  </D:owner>\n" +
 			"</D:lockinfo>",
 		lockInfo{},
-		http.StatusBadRequest,
+		fiber.StatusBadRequest,
 	}, {
 		"bad: unfinished XML #1",
 		"" +
@@ -63,7 +63,7 @@ func TestReadLockInfo(t *testing.T) {
 			"  <D:lockscope><D:exclusive/></D:lockscope>\n" +
 			"  <D:locktype><D:write/></D:locktype>\n",
 		lockInfo{},
-		http.StatusBadRequest,
+		fiber.StatusBadRequest,
 	}, {
 		"bad: unfinished XML #2",
 		"" +
@@ -72,7 +72,7 @@ func TestReadLockInfo(t *testing.T) {
 			"  <D:locktype><D:write/></D:locktype>\n" +
 			"  <D:owner>\n",
 		lockInfo{},
-		http.StatusBadRequest,
+		fiber.StatusBadRequest,
 	}, {
 		"good: empty",
 		"",
@@ -248,7 +248,7 @@ func TestReadPropfind(t *testing.T) {
 	}, {
 		desc:       "propfind: bad: junk",
 		input:      "xxx",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: propname and allprop (section A.3)",
 		input: "" +
@@ -256,7 +256,7 @@ func TestReadPropfind(t *testing.T) {
 			"  <A:propname/>" +
 			"  <A:allprop/>" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: propname and prop",
 		input: "" +
@@ -264,7 +264,7 @@ func TestReadPropfind(t *testing.T) {
 			"  <A:prop><A:displayname/></A:prop>\n" +
 			"  <A:propname/>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: allprop and prop",
 		input: "" +
@@ -272,61 +272,61 @@ func TestReadPropfind(t *testing.T) {
 			"  <A:allprop/>\n" +
 			"  <A:prop><A:foo/><A:/prop>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: empty propfind with ignored element (section A.4)",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <E:expired-props/>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: empty prop",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <A:prop/>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: prop with just chardata",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <A:prop>foo</A:prop>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "bad: interrupted prop",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <A:prop><A:foo></A:prop>\n",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "bad: malformed end element prop",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <A:prop><A:foo/></A:bar></A:prop>\n",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: property with chardata value",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <A:prop><A:foo>bar</A:foo></A:prop>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: property with whitespace value",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <A:prop><A:foo> </A:foo></A:prop>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "propfind: bad: include without allprop",
 		input: "" +
 			"<A:propfind xmlns:A='DAV:'>\n" +
 			"  <A:include><A:foo/></A:include>\n" +
 			"</A:propfind>",
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}}
 
 	for _, tc := range testCases {
@@ -479,12 +479,12 @@ func TestMultistatusWriter(t *testing.T) {
 	}, {
 		desc: "no response written",
 		// default of http.responseWriter
-		wantCode: http.StatusOK,
+		wantCode: fiber.StatusOK,
 	}, {
 		desc:     "no response written (with description)",
 		respdesc: "too bad",
 		// default of http.responseWriter
-		wantCode: http.StatusOK,
+		wantCode: fiber.StatusOK,
 	}, {
 		desc:        "empty multistatus with header",
 		writeHeader: true,
@@ -505,7 +505,7 @@ func TestMultistatusWriter(t *testing.T) {
 		}},
 		wantErr: errInvalidResponse,
 		// default of http.responseWriter
-		wantCode: http.StatusOK,
+		wantCode: fiber.StatusOK,
 	}, {
 		desc: "bad: multiple hrefs and no status",
 		responses: []response{{
@@ -513,7 +513,7 @@ func TestMultistatusWriter(t *testing.T) {
 		}},
 		wantErr: errInvalidResponse,
 		// default of http.responseWriter
-		wantCode: http.StatusOK,
+		wantCode: fiber.StatusOK,
 	}, {
 		desc: "bad: one href and no propstat",
 		responses: []response{{
@@ -521,7 +521,7 @@ func TestMultistatusWriter(t *testing.T) {
 		}},
 		wantErr: errInvalidResponse,
 		// default of http.responseWriter
-		wantCode: http.StatusOK,
+		wantCode: fiber.StatusOK,
 	}, {
 		desc: "bad: status with one href and propstat",
 		responses: []response{{
@@ -539,7 +539,7 @@ func TestMultistatusWriter(t *testing.T) {
 		}},
 		wantErr: errInvalidResponse,
 		// default of http.responseWriter
-		wantCode: http.StatusOK,
+		wantCode: fiber.StatusOK,
 	}, {
 		desc: "bad: multiple hrefs and propstat",
 		responses: []response{{
@@ -559,7 +559,7 @@ func TestMultistatusWriter(t *testing.T) {
 		}},
 		wantErr: errInvalidResponse,
 		// default of http.responseWriter
-		wantCode: http.StatusOK,
+		wantCode: fiber.StatusOK,
 	}}
 
 	n := xmlNormalizer{omitWhitespace: true}
@@ -683,14 +683,14 @@ func TestReadProppatch(t *testing.T) {
 			`         </D:prop>` +
 			`    </D:remove>` +
 			`</D:propertyupdate>`,
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "bad: empty propertyupdate",
 		input: `` +
 			`<?xml version="1.0" encoding="utf-8" ?>` +
 			`<D:propertyupdate xmlns:D="DAV:"` +
 			`</D:propertyupdate>`,
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}, {
 		desc: "bad: empty prop",
 		input: `` +
@@ -701,7 +701,7 @@ func TestReadProppatch(t *testing.T) {
 			`        <D:prop/>` +
 			`    </D:remove>` +
 			`</D:propertyupdate>`,
-		wantStatus: http.StatusBadRequest,
+		wantStatus: fiber.StatusBadRequest,
 	}}
 
 	for _, tc := range testCases {

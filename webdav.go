@@ -8,6 +8,7 @@ package webdav // import "golang.org/x/net/webdav"
 import (
 	"errors"
 	"fmt"
+	"github.com/gofiber/fiber/v3"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,20 +33,20 @@ type Handler struct {
 
 func (h *Handler) stripPrefix(p string) (string, int, error) {
 	if h.Prefix == "" {
-		return p, http.StatusOK, nil
+		return p, fiber.StatusOK, nil
 	}
 	if r := strings.TrimPrefix(p, h.Prefix); len(r) < len(p) {
-		return r, http.StatusOK, nil
+		return r, fiber.StatusOK, nil
 	}
-	return p, http.StatusNotFound, errPrefixMismatch
+	return p, fiber.StatusNotFound, errPrefixMismatch
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	status, err := http.StatusBadRequest, errUnsupportedMethod
+	status, err := fiber.StatusBadRequest, errUnsupportedMethod
 	if h.FileSystem == nil {
-		status, err = http.StatusInternalServerError, errNoFileSystem
+		status, err = fiber.StatusInternalServerError, errNoFileSystem
 	} else if h.LockSystem == nil {
-		status, err = http.StatusInternalServerError, errNoLockSystem
+		status, err = fiber.StatusInternalServerError, errNoLockSystem
 	} else {
 		switch r.Method {
 		case "OPTIONS":
@@ -73,7 +74,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if status != 0 {
 		w.WriteHeader(status)
-		if status != http.StatusNoContent {
+		if status != fiber.StatusNoContent {
 			w.Write([]byte(StatusText(status)))
 		}
 	}
@@ -92,7 +93,7 @@ func (h *Handler) lock(now time.Time, root string) (token string, status int, er
 		if err == ErrLocked {
 			return "", StatusLocked, err
 		}
-		return "", http.StatusInternalServerError, err
+		return "", fiber.StatusInternalServerError, err
 	}
 	return token, 0, nil
 }
@@ -134,7 +135,7 @@ func (h *Handler) confirmLocks(r *http.Request, src, dst string) (release func()
 
 	ih, ok := parseIfHeader(hdr)
 	if !ok {
-		return nil, http.StatusBadRequest, errInvalidIfHeader
+		return nil, fiber.StatusBadRequest, errInvalidIfHeader
 	}
 	// ih is a disjunction (OR) of ifLists, so any ifList will do.
 	for _, l := range ih.lists {
@@ -159,7 +160,7 @@ func (h *Handler) confirmLocks(r *http.Request, src, dst string) (release func()
 			continue
 		}
 		if err != nil {
-			return nil, http.StatusInternalServerError, err
+			return nil, fiber.StatusInternalServerError, err
 		}
 		return release, 0, nil
 	}
@@ -167,7 +168,7 @@ func (h *Handler) confirmLocks(r *http.Request, src, dst string) (release func()
 	// fail, then the request must fail with a 412 (Precondition Failed) status."
 	// We follow the spec even though the cond_put_corrupt_token test case from
 	// the litmus test warns on seeing a 412 instead of a 423 (Locked).
-	return nil, http.StatusPreconditionFailed, ErrLocked
+	return nil, fiber.StatusPreconditionFailed, ErrLocked
 }
 
 func (h *Handler) handleOptions(w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -201,19 +202,19 @@ func (h *Handler) handleGetHeadPost(w http.ResponseWriter, r *http.Request) (sta
 	ctx := r.Context()
 	f, err := h.FileSystem.OpenFile(ctx, reqPath, os.O_RDONLY, 0)
 	if err != nil {
-		return http.StatusNotFound, err
+		return fiber.StatusNotFound, err
 	}
 	defer f.Close()
 	fi, err := f.Stat()
 	if err != nil {
-		return http.StatusNotFound, err
+		return fiber.StatusNotFound, err
 	}
 	if fi.IsDir() {
-		return http.StatusMethodNotAllowed, nil
+		return fiber.StatusMethodNotAllowed, nil
 	}
 	etag, err := findETag(ctx, h.FileSystem, h.LockSystem, reqPath, fi)
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return fiber.StatusInternalServerError, err
 	}
 	w.Header().Set("ETag", etag)
 	// Let ServeContent determine the Content-Type header.
@@ -241,14 +242,14 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) (status i
 	// "404 Not Found". We therefore have to Stat before we RemoveAll.
 	if _, err := h.FileSystem.Stat(ctx, reqPath); err != nil {
 		if os.IsNotExist(err) {
-			return http.StatusNotFound, err
+			return fiber.StatusNotFound, err
 		}
-		return http.StatusMethodNotAllowed, err
+		return fiber.StatusMethodNotAllowed, err
 	}
 	if err := h.FileSystem.RemoveAll(ctx, reqPath); err != nil {
-		return http.StatusMethodNotAllowed, err
+		return fiber.StatusMethodNotAllowed, err
 	}
-	return http.StatusNoContent, nil
+	return fiber.StatusNoContent, nil
 }
 
 func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -268,29 +269,29 @@ func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request) (status int,
 	f, err := h.FileSystem.OpenFile(ctx, reqPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return http.StatusConflict, err
+			return fiber.StatusConflict, err
 		}
-		return http.StatusNotFound, err
+		return fiber.StatusNotFound, err
 	}
 	_, copyErr := io.Copy(f, r.Body)
 	fi, statErr := f.Stat()
 	closeErr := f.Close()
 	// TODO(rost): Returning 405 Method Not Allowed might not be appropriate.
 	if copyErr != nil {
-		return http.StatusMethodNotAllowed, copyErr
+		return fiber.StatusMethodNotAllowed, copyErr
 	}
 	if statErr != nil {
-		return http.StatusMethodNotAllowed, statErr
+		return fiber.StatusMethodNotAllowed, statErr
 	}
 	if closeErr != nil {
-		return http.StatusMethodNotAllowed, closeErr
+		return fiber.StatusMethodNotAllowed, closeErr
 	}
 	etag, err := findETag(ctx, h.FileSystem, h.LockSystem, reqPath, fi)
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return fiber.StatusInternalServerError, err
 	}
 	w.Header().Set("ETag", etag)
-	return http.StatusCreated, nil
+	return fiber.StatusCreated, nil
 }
 
 func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -307,28 +308,28 @@ func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request) (status in
 	ctx := r.Context()
 
 	if r.ContentLength > 0 {
-		return http.StatusUnsupportedMediaType, nil
+		return fiber.StatusUnsupportedMediaType, nil
 	}
 	if err := h.FileSystem.Mkdir(ctx, reqPath, 0777); err != nil {
 		if os.IsNotExist(err) {
-			return http.StatusConflict, err
+			return fiber.StatusConflict, err
 		}
-		return http.StatusMethodNotAllowed, err
+		return fiber.StatusMethodNotAllowed, err
 	}
-	return http.StatusCreated, nil
+	return fiber.StatusCreated, nil
 }
 
 func (h *Handler) handleCopyMove(w http.ResponseWriter, r *http.Request) (status int, err error) {
 	hdr := r.Header.Get("Destination")
 	if hdr == "" {
-		return http.StatusBadRequest, errInvalidDestination
+		return fiber.StatusBadRequest, errInvalidDestination
 	}
 	u, err := url.Parse(hdr)
 	if err != nil {
-		return http.StatusBadRequest, errInvalidDestination
+		return fiber.StatusBadRequest, errInvalidDestination
 	}
 	if u.Host != "" && u.Host != r.Host {
-		return http.StatusBadGateway, errInvalidDestination
+		return fiber.StatusBadGateway, errInvalidDestination
 	}
 
 	src, status, err := h.stripPrefix(r.URL.Path)
@@ -342,10 +343,10 @@ func (h *Handler) handleCopyMove(w http.ResponseWriter, r *http.Request) (status
 	}
 
 	if dst == "" {
-		return http.StatusBadGateway, errInvalidDestination
+		return fiber.StatusBadGateway, errInvalidDestination
 	}
 	if dst == src {
-		return http.StatusForbidden, errDestinationEqualsSource
+		return fiber.StatusForbidden, errDestinationEqualsSource
 	}
 
 	ctx := r.Context()
@@ -370,7 +371,7 @@ func (h *Handler) handleCopyMove(w http.ResponseWriter, r *http.Request) (status
 			if depth != 0 && depth != infiniteDepth {
 				// Section 9.8.3 says that "A client may submit a Depth header on a
 				// COPY on a collection with a value of "0" or "infinity"."
-				return http.StatusBadRequest, errInvalidDepth
+				return fiber.StatusBadRequest, errInvalidDepth
 			}
 		}
 		return copyFiles(ctx, h.FileSystem, src, dst, r.Header.Get("Overwrite") != "F", depth, 0)
@@ -387,7 +388,7 @@ func (h *Handler) handleCopyMove(w http.ResponseWriter, r *http.Request) (status
 	// Depth header on a MOVE on a collection with any value but "infinity"."
 	if hdr := r.Header.Get("Depth"); hdr != "" {
 		if parseDepth(hdr) != infiniteDepth {
-			return http.StatusBadRequest, errInvalidDepth
+			return fiber.StatusBadRequest, errInvalidDepth
 		}
 	}
 	return moveFiles(ctx, h.FileSystem, src, dst, r.Header.Get("Overwrite") == "T")
@@ -396,7 +397,7 @@ func (h *Handler) handleCopyMove(w http.ResponseWriter, r *http.Request) (status
 func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus int, retErr error) {
 	duration, err := parseTimeout(r.Header.Get("Timeout"))
 	if err != nil {
-		return http.StatusBadRequest, err
+		return fiber.StatusBadRequest, err
 	}
 	li, status, err := readLockInfo(r.Body)
 	if err != nil {
@@ -409,20 +410,20 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 		// An empty lockInfo means to refresh the lock.
 		ih, ok := parseIfHeader(r.Header.Get("If"))
 		if !ok {
-			return http.StatusBadRequest, errInvalidIfHeader
+			return fiber.StatusBadRequest, errInvalidIfHeader
 		}
 		if len(ih.lists) == 1 && len(ih.lists[0].conditions) == 1 {
 			token = ih.lists[0].conditions[0].Token
 		}
 		if token == "" {
-			return http.StatusBadRequest, errInvalidLockToken
+			return fiber.StatusBadRequest, errInvalidLockToken
 		}
 		ld, err = h.LockSystem.Refresh(now, token, duration)
 		if err != nil {
 			if err == ErrNoSuchLock {
-				return http.StatusPreconditionFailed, err
+				return fiber.StatusPreconditionFailed, err
 			}
-			return http.StatusInternalServerError, err
+			return fiber.StatusInternalServerError, err
 		}
 
 	} else {
@@ -434,7 +435,7 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 			if depth != 0 && depth != infiniteDepth {
 				// Section 9.10.3 says that "Values other than 0 or infinity must not be
 				// used with the Depth header on a LOCK method".
-				return http.StatusBadRequest, errInvalidDepth
+				return fiber.StatusBadRequest, errInvalidDepth
 			}
 		}
 		reqPath, status, err := h.stripPrefix(r.URL.Path)
@@ -452,7 +453,7 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 			if err == ErrLocked {
 				return StatusLocked, err
 			}
-			return http.StatusInternalServerError, err
+			return fiber.StatusInternalServerError, err
 		}
 		defer func() {
 			if retErr != nil {
@@ -464,8 +465,8 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 		if _, err := h.FileSystem.Stat(ctx, reqPath); err != nil {
 			f, err := h.FileSystem.OpenFile(ctx, reqPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 			if err != nil {
-				// TODO: detect missing intermediate dirs and return http.StatusConflict?
-				return http.StatusInternalServerError, err
+				// TODO: detect missing intermediate dirs and return fiber.StatusConflict?
+				return fiber.StatusInternalServerError, err
 			}
 			f.Close()
 			created = true
@@ -478,10 +479,10 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	if created {
-		// This is "w.WriteHeader(http.StatusCreated)" and not "return
-		// http.StatusCreated, nil" because we write our own (XML) response to w
+		// This is "w.WriteHeader(fiber.StatusCreated)" and not "return
+		// fiber.StatusCreated, nil" because we write our own (XML) response to w
 		// and Handler.ServeHTTP would otherwise write "Created".
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(fiber.StatusCreated)
 	}
 	writeLockInfo(w, token, ld)
 	return 0, nil
@@ -492,21 +493,21 @@ func (h *Handler) handleUnlock(w http.ResponseWriter, r *http.Request) (status i
 	// Lock-Token value is a Coded-URL. We strip its angle brackets.
 	t := r.Header.Get("Lock-Token")
 	if len(t) < 2 || t[0] != '<' || t[len(t)-1] != '>' {
-		return http.StatusBadRequest, errInvalidLockToken
+		return fiber.StatusBadRequest, errInvalidLockToken
 	}
 	t = t[1 : len(t)-1]
 
 	switch err = h.LockSystem.Unlock(time.Now(), t); err {
 	case nil:
-		return http.StatusNoContent, err
+		return fiber.StatusNoContent, err
 	case ErrForbidden:
-		return http.StatusForbidden, err
+		return fiber.StatusForbidden, err
 	case ErrLocked:
 		return StatusLocked, err
 	case ErrNoSuchLock:
-		return http.StatusConflict, err
+		return fiber.StatusConflict, err
 	default:
-		return http.StatusInternalServerError, err
+		return fiber.StatusInternalServerError, err
 	}
 }
 
@@ -519,15 +520,15 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request) (status
 	fi, err := h.FileSystem.Stat(ctx, reqPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return http.StatusNotFound, err
+			return fiber.StatusNotFound, err
 		}
-		return http.StatusMethodNotAllowed, err
+		return fiber.StatusMethodNotAllowed, err
 	}
 	depth := infiniteDepth
 	if hdr := r.Header.Get("Depth"); hdr != "" {
 		depth = parseDepth(hdr)
 		if depth == invalidDepth {
-			return http.StatusBadRequest, errInvalidDepth
+			return fiber.StatusBadRequest, errInvalidDepth
 		}
 	}
 	pf, status, err := readPropfind(r.Body)
@@ -548,7 +549,7 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request) (status
 			if err != nil {
 				return handlePropfindError(err, info)
 			}
-			pstat := Propstat{Status: http.StatusOK}
+			pstat := Propstat{Status: fiber.StatusOK}
 			for _, xmlname := range pnames {
 				pstat.Props = append(pstat.Props, Property{XMLName: xmlname})
 			}
@@ -571,10 +572,10 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request) (status
 	walkErr := walkFS(ctx, h.FileSystem, depth, reqPath, fi, walkFn)
 	closeErr := mw.close()
 	if walkErr != nil {
-		return http.StatusInternalServerError, walkErr
+		return fiber.StatusInternalServerError, walkErr
 	}
 	if closeErr != nil {
-		return http.StatusInternalServerError, closeErr
+		return fiber.StatusInternalServerError, closeErr
 	}
 	return 0, nil
 }
@@ -594,9 +595,9 @@ func (h *Handler) handleProppatch(w http.ResponseWriter, r *http.Request) (statu
 
 	if _, err := h.FileSystem.Stat(ctx, reqPath); err != nil {
 		if os.IsNotExist(err) {
-			return http.StatusNotFound, err
+			return fiber.StatusNotFound, err
 		}
-		return http.StatusMethodNotAllowed, err
+		return fiber.StatusMethodNotAllowed, err
 	}
 	patches, status, err := readProppatch(r.Body)
 	if err != nil {
@@ -604,16 +605,16 @@ func (h *Handler) handleProppatch(w http.ResponseWriter, r *http.Request) (statu
 	}
 	pstats, err := patch(ctx, h.FileSystem, h.LockSystem, reqPath, patches)
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return fiber.StatusInternalServerError, err
 	}
 	mw := multistatusWriter{w: w}
 	writeErr := mw.write(makePropstatResponse(r.URL.Path, pstats))
 	closeErr := mw.close()
 	if writeErr != nil {
-		return http.StatusInternalServerError, writeErr
+		return fiber.StatusInternalServerError, writeErr
 	}
 	if closeErr != nil {
-		return http.StatusInternalServerError, closeErr
+		return fiber.StatusInternalServerError, closeErr
 	}
 	return 0, nil
 }

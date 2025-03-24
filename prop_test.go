@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"github.com/gofiber/fiber/v3"
 	"net/http"
 	"os"
 	"reflect"
@@ -102,7 +103,7 @@ func TestMemPS(t *testing.T) {
 			op:   "allprop",
 			name: "/dir",
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "DAV:", Local: "resourcetype"},
 					InnerXML: []byte(`<D:collection xmlns:D="DAV:"/>`),
@@ -121,7 +122,7 @@ func TestMemPS(t *testing.T) {
 			op:   "allprop",
 			name: "/file",
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "DAV:", Local: "resourcetype"},
 					InnerXML: []byte(""),
@@ -153,7 +154,7 @@ func TestMemPS(t *testing.T) {
 				{Space: "foo", Local: "bar"},
 			},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "DAV:", Local: "resourcetype"},
 					InnerXML: []byte(""),
@@ -176,7 +177,7 @@ func TestMemPS(t *testing.T) {
 					XMLName:  xml.Name{Space: "DAV:", Local: "supportedlock"},
 					InnerXML: []byte(lockEntry),
 				}}}, {
-				Status: http.StatusNotFound,
+				Status: fiber.StatusNotFound,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}}},
@@ -190,7 +191,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/dir",
 			pnames: []xml.Name{{Space: "DAV:", Local: "resourcetype"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "DAV:", Local: "resourcetype"},
 					InnerXML: []byte(`<D:collection xmlns:D="DAV:"/>`),
@@ -201,7 +202,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/file",
 			pnames: []xml.Name{{Space: "DAV:", Local: "resourcetype"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "DAV:", Local: "resourcetype"},
 					InnerXML: []byte(""),
@@ -216,7 +217,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/dir",
 			pnames: []xml.Name{{Space: "DAV:", Local: "getcontentlanguage"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusNotFound,
+				Status: fiber.StatusNotFound,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "DAV:", Local: "getcontentlanguage"},
 				}},
@@ -226,7 +227,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/dir",
 			pnames: []xml.Name{{Space: "DAV:", Local: "creationdate"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusNotFound,
+				Status: fiber.StatusNotFound,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "DAV:", Local: "creationdate"},
 				}},
@@ -240,7 +241,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/dir",
 			pnames: []xml.Name{{Space: "DAV:", Local: "getetag"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusNotFound,
+				Status: fiber.StatusNotFound,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "DAV:", Local: "getetag"},
 				}},
@@ -250,7 +251,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/file",
 			pnames: []xml.Name{{Space: "DAV:", Local: "getetag"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "DAV:", Local: "getetag"},
 					InnerXML: nil, // Calculated during test.
@@ -270,7 +271,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusForbidden,
+				Status: fiber.StatusForbidden,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}},
@@ -284,7 +285,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status:   http.StatusForbidden,
+				Status:   fiber.StatusForbidden,
 				XMLError: statForbiddenError,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "DAV:", Local: "getetag"},
@@ -304,7 +305,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}},
@@ -314,7 +315,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/dir",
 			pnames: []xml.Name{{Space: "foo", Local: "bar"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "foo", Local: "bar"},
 					InnerXML: []byte("baz"),
@@ -339,7 +340,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status:   http.StatusForbidden,
+				Status:   fiber.StatusForbidden,
 				XMLError: statForbiddenError,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "DAV:", Local: "displayname"},
@@ -355,7 +356,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/dir",
 			pnames: []xml.Name{{Space: "foo", Local: "bar"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusNotFound,
+				Status: fiber.StatusNotFound,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}},
@@ -377,7 +378,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}, {
@@ -392,7 +393,7 @@ func TestMemPS(t *testing.T) {
 				{Space: "spam", Local: "ham"},
 			},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "foo", Local: "bar"},
 					InnerXML: []byte("baz"),
@@ -411,7 +412,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}},
@@ -424,12 +425,12 @@ func TestMemPS(t *testing.T) {
 				{Space: "spam", Local: "ham"},
 			},
 			wantPropstats: []Propstat{{
-				Status: http.StatusNotFound,
+				Status: fiber.StatusNotFound,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}},
 			}, {
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName:  xml.Name{Space: "spam", Local: "ham"},
 					InnerXML: []byte("eggs"),
@@ -449,7 +450,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}},
@@ -481,7 +482,7 @@ func TestMemPS(t *testing.T) {
 				}},
 			}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusOK,
+				Status: fiber.StatusOK,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo", Local: "bar"},
 				}},
@@ -495,7 +496,7 @@ func TestMemPS(t *testing.T) {
 			name:   "/dir",
 			pnames: []xml.Name{{Space: "foo:", Local: "bar"}},
 			wantPropstats: []Propstat{{
-				Status: http.StatusNotFound,
+				Status: fiber.StatusNotFound,
 				Props: []Property{{
 					XMLName: xml.Name{Space: "foo:", Local: "bar"},
 				}},

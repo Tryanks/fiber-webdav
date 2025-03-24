@@ -11,13 +11,14 @@ go run litmus_test_server.go
 
 and separately, from the downloaded litmus-xxx directory:
 
-make URL=http://localhost:9999/ check
+make URL=http://localhost:3000/ check
 */
 package main
 
 import (
 	"flag"
 	"fmt"
+	"github.com/gofiber/fiber/v3"
 	"log"
 	"net/http"
 	"net/url"
@@ -25,7 +26,7 @@ import (
 	"github.com/Tryanks/fiber-webdav"
 )
 
-var port = flag.Int("port", 9999, "server port")
+var port = flag.Int("port", 3000, "server port")
 
 func main() {
 	flag.Parse()
@@ -80,7 +81,7 @@ func main() {
 	// hard-code the 400 Bad Request response that the test expects.
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
-			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			http.Error(w, "400 Bad Request", fiber.StatusBadRequest)
 			return
 		}
 		h.ServeHTTP(w, r)

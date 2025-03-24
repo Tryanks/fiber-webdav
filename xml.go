@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"github.com/gofiber/fiber/v3"
 	"io"
 	"net/http"
 	"time"
@@ -60,12 +61,12 @@ func readLockInfo(r io.Reader) (li lockInfo, status int, err error) {
 			}
 			err = errInvalidLockInfo
 		}
-		return lockInfo{}, http.StatusBadRequest, err
+		return lockInfo{}, fiber.StatusBadRequest, err
 	}
 	// We only support exclusive (non-shared) write locks. In practice, these are
 	// the only types of locks that seem to matter.
 	if li.Exclusive == nil || li.Shared != nil || li.Write == nil {
-		return lockInfo{}, http.StatusNotImplemented, errUnsupportedLockInfo
+		return lockInfo{}, fiber.StatusNotImplemented, errUnsupportedLockInfo
 	}
 	return li, 0, nil
 }
@@ -186,20 +187,20 @@ func readPropfind(r io.Reader) (pf propfind, status int, err error) {
 			}
 			err = errInvalidPropfind
 		}
-		return propfind{}, http.StatusBadRequest, err
+		return propfind{}, fiber.StatusBadRequest, err
 	}
 
 	if pf.Allprop == nil && pf.Include != nil {
-		return propfind{}, http.StatusBadRequest, errInvalidPropfind
+		return propfind{}, fiber.StatusBadRequest, errInvalidPropfind
 	}
 	if pf.Allprop != nil && (pf.Prop != nil || pf.Propname != nil) {
-		return propfind{}, http.StatusBadRequest, errInvalidPropfind
+		return propfind{}, fiber.StatusBadRequest, errInvalidPropfind
 	}
 	if pf.Prop != nil && pf.Propname != nil {
-		return propfind{}, http.StatusBadRequest, errInvalidPropfind
+		return propfind{}, fiber.StatusBadRequest, errInvalidPropfind
 	}
 	if pf.Propname == nil && pf.Allprop == nil && pf.Prop == nil {
-		return propfind{}, http.StatusBadRequest, errInvalidPropfind
+		return propfind{}, fiber.StatusBadRequest, errInvalidPropfind
 	}
 	return pf, 0, nil
 }
@@ -496,7 +497,7 @@ type propertyupdate struct {
 func readProppatch(r io.Reader) (patches []Proppatch, status int, err error) {
 	var pu propertyupdate
 	if err = ixml.NewDecoder(r).Decode(&pu); err != nil {
-		return nil, http.StatusBadRequest, err
+		return nil, fiber.StatusBadRequest, err
 	}
 	for _, op := range pu.SetRemove {
 		remove := false
@@ -506,12 +507,12 @@ func readProppatch(r io.Reader) (patches []Proppatch, status int, err error) {
 		case ixml.Name{Space: "DAV:", Local: "remove"}:
 			for _, p := range op.Prop {
 				if len(p.InnerXML) > 0 {
-					return nil, http.StatusBadRequest, errInvalidProppatch
+					return nil, fiber.StatusBadRequest, errInvalidProppatch
 				}
 			}
 			remove = true
 		default:
-			return nil, http.StatusBadRequest, errInvalidProppatch
+			return nil, fiber.StatusBadRequest, errInvalidProppatch
 		}
 		patches = append(patches, Proppatch{Remove: remove, Props: op.Prop})
 	}
