@@ -49,25 +49,25 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status, err = fiber.StatusInternalServerError, errNoLockSystem
 	} else {
 		switch r.Method {
-		case "OPTIONS":
+		case fiber.MethodOptions:
 			status, err = h.handleOptions(w, r)
-		case "GET", "HEAD", "POST":
+		case fiber.MethodGet, fiber.MethodHead, fiber.MethodPost:
 			status, err = h.handleGetHeadPost(w, r)
-		case "DELETE":
+		case fiber.MethodDelete:
 			status, err = h.handleDelete(w, r)
-		case "PUT":
+		case fiber.MethodPut:
 			status, err = h.handlePut(w, r)
-		case "MKCOL":
+		case MethodMkcol:
 			status, err = h.handleMkcol(w, r)
-		case "COPY", "MOVE":
+		case MethodCopy, MethodMove:
 			status, err = h.handleCopyMove(w, r)
-		case "LOCK":
+		case MethodLock:
 			status, err = h.handleLock(w, r)
-		case "UNLOCK":
+		case MethodUnlock:
 			status, err = h.handleUnlock(w, r)
-		case "PROPFIND":
+		case MethodPropfind:
 			status, err = h.handlePropfind(w, r)
-		case "PROPPATCH":
+		case MethodProppatch:
 			status, err = h.handleProppatch(w, r)
 		}
 	}
