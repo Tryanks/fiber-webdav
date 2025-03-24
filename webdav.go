@@ -48,6 +48,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if h.LockSystem == nil {
 		status, err = fiber.StatusInternalServerError, errNoLockSystem
 	} else {
+		// Fix sardine HEAD with Folder
+		// Reference: https://github.com/hacdias/webdav/blob/f0b5a39d802a4db0245f225a3f68d71efd866f1b/lib/handler.go#L143
+		if (r.Method == fiber.MethodGet || r.Method == fiber.MethodHead) &&
+			strings.HasSuffix(r.URL.Path, h.Prefix) {
+			info, err := h.FileSystem.Stat(r.Context(), strings.TrimPrefix(r.URL.Path, h.Prefix))
+			if err == nil && info.IsDir() {
+				r.Method = MethodPropfind
+
+				if r.Header.Get("Depth") == "" {
+					r.Header.Set("Depth", "1")
+				}
+			}
+		}
+
 		switch r.Method {
 		case fiber.MethodOptions:
 			status, err = h.handleOptions(w, r)
