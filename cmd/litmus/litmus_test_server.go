@@ -34,7 +34,7 @@ func main() {
 	h := &webdav.Handler{
 		FileSystem: webdav.NewMemFS(),
 		LockSystem: webdav.NewMemLS(),
-		Logger: func(r *http.Request, err error) {
+		Logger: func(r *http.Request, _ int, err error) {
 			litmus := r.Header.Get("X-Litmus")
 			if len(litmus) > 19 {
 				litmus = litmus[:16] + "..."

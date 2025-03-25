@@ -18,8 +18,8 @@ func main() {
 		w := &webdav.Handler{
 			FileSystem: webdav.NewMemFS(),
 			LockSystem: webdav.NewMemLS(),
-			Logger: func(request *http.Request, err error) {
-				fmt.Println("\t", request.Method, request.URL.Path)
+			Logger: func(request *http.Request, status int, err error) {
+				fmt.Println("\t", request.Method, status, request.URL.Path)
 				if err != nil {
 					fmt.Println("\t\tERROR:", err)
 				}
