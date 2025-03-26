@@ -1,5 +1,7 @@
 package webdav
 
+import "github.com/gofiber/fiber/v3"
+
 const (
 	MethodMkcol     = "MKCOL"
 	MethodCopy      = "COPY"
@@ -16,3 +18,5 @@ var Methods = []string{
 	MethodLock, MethodUnlock,
 	MethodPropfind, MethodProppatch,
 }
+
+var ExtendedMethods = append(fiber.DefaultMethods[:], Methods...)

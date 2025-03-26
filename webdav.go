@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/adaptor"
 	"io"
 	"net/http"
 	"net/url"
@@ -28,7 +29,15 @@ type Handler struct {
 	LockSystem LockSystem
 	// Logger is an optional error logger. If non-nil, it will be called
 	// for all HTTP requests.
-	Logger func(*http.Request, int, error)
+	Logger func(int, error)
+}
+
+func NewWebdavServer(prefix string, fs FileSystem, ls LockSystem) *Handler {
+	return &Handler{
+		Prefix:     prefix,
+		FileSystem: fs,
+		LockSystem: ls,
+	}
 }
 
 func (h *Handler) stripPrefix(p string) (string, int, error) {
@@ -41,6 +50,25 @@ func (h *Handler) stripPrefix(p string) (string, int, error) {
 	return p, fiber.StatusNotFound, errPrefixMismatch
 }
 
+func (h *Handler) ServeFiber(c fiber.Ctx) error {
+	// Fix sardine HEAD with Folder
+	// Reference: https://github.com/hacdias/webdav/blob/f0b5a39d802a4db0245f225a3f68d71efd866f1b/lib/handler.go#L143
+	if (c.Method() == fiber.MethodGet || c.Method() == fiber.MethodHead) &&
+		strings.HasSuffix(c.Path(), h.Prefix) {
+		info, err := h.FileSystem.Stat(c.RequestCtx(), strings.TrimPrefix(c.Path(), h.Prefix))
+		if err == nil && info.IsDir() {
+			c.Method(MethodPropfind)
+
+			if c.Get("Depth") == "" {
+				c.Set("Depth", "1")
+			}
+		}
+	}
+
+	handler := adaptor.HTTPHandler(h)
+	return handler(c)
+}
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	status, err := fiber.StatusBadRequest, errUnsupportedMethod
 	if h.FileSystem == nil {
@@ -48,20 +76,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if h.LockSystem == nil {
 		status, err = fiber.StatusInternalServerError, errNoLockSystem
 	} else {
-		// Fix sardine HEAD with Folder
-		// Reference: https://github.com/hacdias/webdav/blob/f0b5a39d802a4db0245f225a3f68d71efd866f1b/lib/handler.go#L143
-		if (r.Method == fiber.MethodGet || r.Method == fiber.MethodHead) &&
-			strings.HasSuffix(r.URL.Path, h.Prefix) {
-			info, err := h.FileSystem.Stat(r.Context(), strings.TrimPrefix(r.URL.Path, h.Prefix))
-			if err == nil && info.IsDir() {
-				r.Method = MethodPropfind
-
-				if r.Header.Get("Depth") == "" {
-					r.Header.Set("Depth", "1")
-				}
-			}
-		}
-
 		switch r.Method {
 		case fiber.MethodOptions:
 			status, err = h.handleOptions(w, r)
@@ -88,12 +102,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if status != 0 {
 		w.WriteHeader(status)
-		if status != fiber.StatusNoContent {
-			w.Write([]byte(StatusText(status)))
-		}
+		w.Write([]byte(StatusText(status)))
 	}
-	if h.Logger != nil {
-		h.Logger(r, status, err)
+
+	if err != nil && h.Logger != nil {
+		h.Logger(status, err)
 	}
 }
 
@@ -728,6 +741,8 @@ func StatusText(code int) string {
 		return "Failed Dependency"
 	case StatusInsufficientStorage:
 		return "Insufficient Storage"
+	case fiber.StatusNoContent:
+		return ""
 	}
 	return http.StatusText(code)
 }
