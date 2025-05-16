@@ -159,6 +159,13 @@ func (fs LocalFileSystem) Create(ctx context.Context, name string, body io.ReadC
 		return nil, false, err
 	}
 
+	// Check if parent directory exists
+	dir := filepath.Dir(p)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		// Parent directory doesn't exist, return 409 Conflict as per RFC4918:S9.7.1
+		return nil, false, NewHTTPError(http.StatusConflict, fmt.Errorf("parent collection doesn't exist"))
+	}
+
 	wc, err := os.Create(p)
 	if err != nil {
 		return nil, false, errFromOS(err)
