@@ -317,26 +317,39 @@ func (b *backend) resourceTypeAtPath(reqPath string) resourceType {
 func (b *backend) Options(r *http.Request) (caps []string, allow []string, err error) {
 	caps = []string{"calendar-access"}
 
+	// Add lock capability if global lock system is available
+	if webdav.GetGlobalLockSystem() != nil {
+		caps = append(caps, "1")
+	}
+
+	var methods []string
 	if b.resourceTypeAtPath(r.URL.Path) != resourceTypeCalendarObject {
-		return caps, []string{http.MethodOptions, "PROPFIND", "REPORT", "DELETE", "MKCOL"}, nil
+		methods = []string{http.MethodOptions, "PROPFIND", "REPORT", "DELETE", "MKCOL"}
+	} else {
+		var dataReq CalendarCompRequest
+		_, err = b.Backend.GetCalendarObject(r.Context(), r.URL.Path, &dataReq)
+		if httpErr, ok := err.(*internal.HTTPError); ok && httpErr.Code == http.StatusNotFound {
+			methods = []string{http.MethodOptions, http.MethodPut}
+		} else if err != nil {
+			return nil, nil, err
+		} else {
+			methods = []string{
+				http.MethodOptions,
+				http.MethodHead,
+				http.MethodGet,
+				http.MethodPut,
+				http.MethodDelete,
+				"PROPFIND",
+			}
+		}
 	}
 
-	var dataReq CalendarCompRequest
-	_, err = b.Backend.GetCalendarObject(r.Context(), r.URL.Path, &dataReq)
-	if httpErr, ok := err.(*internal.HTTPError); ok && httpErr.Code == http.StatusNotFound {
-		return caps, []string{http.MethodOptions, http.MethodPut}, nil
-	} else if err != nil {
-		return nil, nil, err
+	// Add lock methods if global lock system is available
+	if webdav.GetGlobalLockSystem() != nil {
+		methods = append(methods, "LOCK", "UNLOCK")
 	}
 
-	return caps, []string{
-		http.MethodOptions,
-		http.MethodHead,
-		http.MethodGet,
-		http.MethodPut,
-		http.MethodDelete,
-		"PROPFIND",
-	}, nil
+	return caps, methods, nil
 }
 
 func (b *backend) HeadGet(w http.ResponseWriter, r *http.Request) error {
@@ -742,11 +755,13 @@ func (b *backend) Move(r *http.Request, dest *internal.Href, overwrite bool) (cr
 }
 
 func (b *backend) Lock(r *http.Request, depth internal.Depth, timeout time.Duration, refreshToken string) (lock *internal.Lock, created bool, err error) {
-	return nil, false, internal.HTTPErrorf(http.StatusMethodNotAllowed, "caldav: unsupported method")
+	// Use the global lock system
+	return webdav.GetGlobalLockSystem().Lock(r, depth, timeout, refreshToken)
 }
 
 func (b *backend) Unlock(r *http.Request, tokenHref string) error {
-	return internal.HTTPErrorf(http.StatusMethodNotAllowed, "webdav: unsupported method")
+	// Use the global lock system
+	return webdav.GetGlobalLockSystem().Unlock(r, tokenHref)
 }
 
 // https://datatracker.ietf.org/doc/html/rfc4791#section-5.3.2.1

@@ -282,28 +282,41 @@ func (b *backend) resourceTypeAtPath(reqPath string) resourceType {
 func (b *backend) Options(r *http.Request) (caps []string, allow []string, err error) {
 	caps = []string{"addressbook"}
 
+	// Add lock capability if global lock system is available
+	if webdav.GetGlobalLockSystem() != nil {
+		caps = append(caps, "1")
+	}
+
+	var methods []string
 	if b.resourceTypeAtPath(r.URL.Path) != resourceTypeAddressObject {
 		// Note: some clients assume the address book is read-only when
 		// DELETE/MKCOL are missing
-		return caps, []string{http.MethodOptions, "PROPFIND", "REPORT", "DELETE", "MKCOL"}, nil
+		methods = []string{http.MethodOptions, "PROPFIND", "REPORT", "DELETE", "MKCOL"}
+	} else {
+		var dataReq AddressDataRequest
+		_, err = b.Backend.GetAddressObject(r.Context(), r.URL.Path, &dataReq)
+		if httpErr, ok := err.(*internal.HTTPError); ok && httpErr.Code == http.StatusNotFound {
+			methods = []string{http.MethodOptions, http.MethodPut}
+		} else if err != nil {
+			return nil, nil, err
+		} else {
+			methods = []string{
+				http.MethodOptions,
+				http.MethodHead,
+				http.MethodGet,
+				http.MethodPut,
+				http.MethodDelete,
+				"PROPFIND",
+			}
+		}
 	}
 
-	var dataReq AddressDataRequest
-	_, err = b.Backend.GetAddressObject(r.Context(), r.URL.Path, &dataReq)
-	if httpErr, ok := err.(*internal.HTTPError); ok && httpErr.Code == http.StatusNotFound {
-		return caps, []string{http.MethodOptions, http.MethodPut}, nil
-	} else if err != nil {
-		return nil, nil, err
+	// Add lock methods if global lock system is available
+	if webdav.GetGlobalLockSystem() != nil {
+		methods = append(methods, "LOCK", "UNLOCK")
 	}
 
-	return caps, []string{
-		http.MethodOptions,
-		http.MethodHead,
-		http.MethodGet,
-		http.MethodPut,
-		http.MethodDelete,
-		"PROPFIND",
-	}, nil
+	return caps, methods, nil
 }
 
 func (b *backend) HeadGet(w http.ResponseWriter, r *http.Request) error {
@@ -735,11 +748,13 @@ func (b *backend) Move(r *http.Request, dest *internal.Href, overwrite bool) (cr
 }
 
 func (b *backend) Lock(r *http.Request, depth internal.Depth, timeout time.Duration, refreshToken string) (lock *internal.Lock, created bool, err error) {
-	return nil, false, internal.HTTPErrorf(http.StatusMethodNotAllowed, "carddav: unsupported method")
+	// Use the global lock system
+	return webdav.GetGlobalLockSystem().Lock(r, depth, timeout, refreshToken)
 }
 
 func (b *backend) Unlock(r *http.Request, tokenHref string) error {
-	return internal.HTTPErrorf(http.StatusMethodNotAllowed, "webdav: unsupported method")
+	// Use the global lock system
+	return webdav.GetGlobalLockSystem().Unlock(r, tokenHref)
 }
 
 // PreconditionType as defined in https://tools.ietf.org/rfcmarkup?doc=6352#section-6.3.2.1

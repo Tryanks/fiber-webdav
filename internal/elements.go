@@ -21,6 +21,7 @@ var (
 	GetLastModifiedName  = xml.Name{Namespace, "getlastmodified"}
 	GetETagName          = xml.Name{Namespace, "getetag"}
 	SupportedLockName    = xml.Name{Namespace, "supportedlock"}
+	LockDiscoveryName    = xml.Name{Namespace, "lockdiscovery"}
 
 	CurrentUserPrincipalName = xml.Name{Namespace, "current-user-principal"}
 )

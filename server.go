@@ -29,6 +29,7 @@ type FileSystem interface {
 // server.
 type Handler struct {
 	FileSystem FileSystem
+	LockSystem *LockSystem
 }
 
 // ServeHTTP implements http.Handler.
@@ -38,7 +39,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b := backend{h.FileSystem}
+	// Use the global lock system if not provided
+	if h.LockSystem == nil {
+		h.LockSystem = GetGlobalLockSystem()
+	}
+
+	b := backend{
+		FileSystem: h.FileSystem,
+		LockSystem: h.LockSystem,
+	}
 	hh := internal.Handler{Backend: &b}
 	hh.ServeHTTP(w, r)
 }
@@ -54,14 +63,23 @@ func NewHTTPError(statusCode int, cause error) error {
 
 type backend struct {
 	FileSystem FileSystem
+	LockSystem *LockSystem
 }
 
 func (b *backend) Options(r *http.Request) (caps []string, allow []string, err error) {
+	// Add lock capability if lock system is available
 	caps = []string{"2"}
+	if b.LockSystem != nil {
+		caps = append(caps, "1")
+	}
 
 	fi, err := b.FileSystem.Stat(r.Context(), r.URL.Path)
 	if internal.IsNotFound(err) {
-		return caps, []string{http.MethodOptions, http.MethodPut, "MKCOL"}, nil
+		methods := []string{http.MethodOptions, http.MethodPut, "MKCOL"}
+		if b.LockSystem != nil {
+			methods = append(methods, "LOCK")
+		}
+		return caps, methods, nil
 	} else if err != nil {
 		return nil, nil, err
 	}
@@ -76,6 +94,11 @@ func (b *backend) Options(r *http.Request) (caps []string, allow []string, err e
 
 	if !fi.IsDir {
 		allow = append(allow, http.MethodHead, http.MethodGet, http.MethodPut)
+	}
+
+	// Add lock methods if lock system is available
+	if b.LockSystem != nil {
+		allow = append(allow, "LOCK", "UNLOCK")
 	}
 
 	return caps, allow, nil
@@ -170,6 +193,12 @@ func (b *backend) propFindFile(propfind *internal.PropFind, fi *FileInfo) (*inte
 			LockType:  internal.LockType{Write: &struct{}{}},
 		}},
 	})
+
+	// Add empty lockdiscovery property when lock system is available
+	// Actual lock information would be added by the lock system if needed
+	if b.LockSystem != nil {
+		props[internal.LockDiscoveryName] = internal.PropFindValue(&internal.LockDiscovery{})
+	}
 
 	if !fi.IsDir {
 		props[internal.GetContentLengthName] = internal.PropFindValue(&internal.GetContentLength{
@@ -281,11 +310,17 @@ func (b *backend) Move(r *http.Request, dest *internal.Href, overwrite bool) (cr
 }
 
 func (b *backend) Lock(r *http.Request, depth internal.Depth, timeout time.Duration, refreshToken string) (lock *internal.Lock, created bool, err error) {
-	return nil, false, internal.HTTPErrorf(http.StatusMethodNotAllowed, "webdav: unsupported method")
+	if b.LockSystem == nil {
+		return nil, false, internal.HTTPErrorf(http.StatusMethodNotAllowed, "webdav: lock system not available")
+	}
+	return b.LockSystem.Lock(r, depth, timeout, refreshToken)
 }
 
 func (b *backend) Unlock(r *http.Request, tokenHref string) error {
-	return internal.HTTPErrorf(http.StatusMethodNotAllowed, "webdav: unsupported method")
+	if b.LockSystem == nil {
+		return internal.HTTPErrorf(http.StatusMethodNotAllowed, "webdav: lock system not available")
+	}
+	return b.LockSystem.Unlock(r, tokenHref)
 }
 
 // BackendSuppliedHomeSet represents either a CalDAV calendar-home-set or a
