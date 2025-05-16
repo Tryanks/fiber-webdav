@@ -323,15 +323,6 @@ func (b *backend) Unlock(r *http.Request, tokenHref string) error {
 	return b.LockSystem.Unlock(r, tokenHref)
 }
 
-// BackendSuppliedHomeSet represents either a CalDAV calendar-home-set or a
-// CardDAV addressbook-home-set. It should only be created via
-// caldav.NewCalendarHomeSet or carddav.NewAddressBookHomeSet. Only to
-// be used server-side, for listing a user's home sets as determined by the
-// (external) backend.
-type BackendSuppliedHomeSet interface {
-	GetXMLName() xml.Name
-}
-
 // UserPrincipalBackend can determine the current user's principal URL for a
 // given request context.
 type UserPrincipalBackend interface {
@@ -344,7 +335,6 @@ type Capability string
 // ServePrincipalOptions holds options for ServePrincipal.
 type ServePrincipalOptions struct {
 	CurrentUserPrincipalPath string
-	HomeSets                 []BackendSuppliedHomeSet
 	Capabilities             []Capability
 }
 
@@ -384,13 +374,6 @@ func servePrincipalPropfind(w http.ResponseWriter, r *http.Request, options *Ser
 	}
 
 	// TODO: handle Depth and more properties
-
-	for _, homeSet := range options.HomeSets {
-		hs := homeSet // capture variable for closure
-		props[homeSet.GetXMLName()] = func(*internal.RawXMLValue) (interface{}, error) {
-			return hs, nil
-		}
-	}
 
 	resp, err := internal.NewPropFindResponse(r.URL.Path, &propfind, props)
 	if err != nil {

@@ -4,84 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 	"unicode"
 )
-
-// DiscoverContextURL performs a DNS-based CardDAV/CalDAV service discovery as
-// described in RFC 6764. It returns the URL to the CardDAV/CalDAV server.
-// Specifically it implements points 2 and 3 from the bootstrapping procedure
-// defined in RFC 6764 section 6.
-func DiscoverContextURL(ctx context.Context, service, domain string) (string, error) {
-	var resolver net.Resolver
-
-	// Only lookup TLS records, plaintext connections are insecure
-	_, addrs, err := resolver.LookupSRV(ctx, service+"s", "tcp", domain)
-	if dnsErr, ok := err.(*net.DNSError); ok {
-		if dnsErr.IsTemporary {
-			return "", err
-		}
-	} else if err != nil {
-		return "", err
-	}
-
-	if len(addrs) == 0 {
-		return "", errors.New("webdav: domain doesn't have an SRV record")
-	}
-	addr := addrs[0]
-
-	target := strings.TrimSuffix(addr.Target, ".")
-	if target == "" {
-		return "", errors.New("webdav: empty target in SRV record")
-	}
-
-	txtName := fmt.Sprintf("_%ss._tcp.%s", service, domain)
-	txtRecords, err := resolver.LookupTXT(ctx, txtName)
-	if dnsErr, ok := err.(*net.DNSError); ok {
-		if dnsErr.IsTemporary {
-			return "", err
-		}
-	} else if err != nil {
-		return "", err
-	}
-
-	var path string
-	switch len(txtRecords) {
-	case 0:
-		path = "/.well-known/" + service
-	case 1:
-		record := txtRecords[0]
-		if !strings.HasPrefix(record, "path=") {
-			return "", fmt.Errorf("webdav: TXT record for %s does not contain the path key", txtName)
-		}
-
-		path = strings.TrimPrefix(record, "path=")
-		if path == "" {
-			return "", fmt.Errorf("webdav: empty path for %s TXT record", txtName)
-		}
-	default: // more than 1
-		return "", fmt.Errorf("webdav: more than one entry found on %s discovery TXT record", txtName)
-	}
-
-	u := url.URL{
-		Scheme: "https",
-		Path:   path,
-	}
-	if addr.Port == 443 {
-		u.Host = target
-	} else {
-		u.Host = fmt.Sprintf("%v:%v", target, addr.Port)
-	}
-	return u.String(), nil
-}
 
 // HTTPClient performs HTTP requests. It's implemented by *http.Client.
 type HTTPClient interface {
