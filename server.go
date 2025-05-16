@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emersion/go-webdav/internal"
+	"github.com/Tryanks/fiber-webdav/internal"
 )
 
 // FileSystem is a WebDAV server backend.

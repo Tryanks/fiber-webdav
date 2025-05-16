@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emersion/go-webdav/internal"
+	"github.com/Tryanks/fiber-webdav/internal"
 )
 
 // LockSystem provides an in-memory implementation of WebDAV locks.
