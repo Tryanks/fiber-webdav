@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -47,6 +48,66 @@ func DecodeXMLRequest(r *http.Request, v interface{}) error {
 		return HTTPErrorf(http.StatusBadRequest, "webdav: expected application/xml request")
 	}
 
+	// Read the entire body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return &HTTPError{http.StatusBadRequest, err}
+	}
+	r.Body.Close()
+
+	// Check for empty namespace declarations in the raw XML
+	// This is a more reliable way to detect xmlns:prefix="" declarations
+	rawXML := string(bodyBytes)
+	if strings.Contains(rawXML, "xmlns:") {
+		// Look for xmlns:prefix="" pattern
+		startIdx := 0
+		for {
+			idx := strings.Index(rawXML[startIdx:], "xmlns:")
+			if idx == -1 {
+				break
+			}
+			idx += startIdx // Adjust index to be relative to the start of the string
+
+			// Find the end of the attribute name
+			nameEndIdx := strings.IndexAny(rawXML[idx:], "= \t\n\r>")
+			if nameEndIdx == -1 {
+				break
+			}
+			nameEndIdx += idx
+
+			// Find the opening quote
+			quoteIdx := strings.IndexAny(rawXML[nameEndIdx:], "\"'")
+			if quoteIdx == -1 {
+				break
+			}
+			quoteIdx += nameEndIdx
+			quoteChar := rawXML[quoteIdx]
+
+			// Find the closing quote
+			closeQuoteIdx := strings.IndexByte(rawXML[quoteIdx+1:], quoteChar)
+			if closeQuoteIdx == -1 {
+				break
+			}
+			closeQuoteIdx += quoteIdx + 1
+
+			// Check if the value is empty
+			if closeQuoteIdx == quoteIdx+1 {
+				return HTTPErrorf(http.StatusBadRequest, "webdav: empty namespace declaration is invalid")
+			}
+
+			startIdx = closeQuoteIdx + 1
+		}
+	}
+
+	// Also check for empty default namespace (xmlns="")
+	if strings.Contains(rawXML, "xmlns=\"\"") || strings.Contains(rawXML, "xmlns=''") {
+		return HTTPErrorf(http.StatusBadRequest, "webdav: empty namespace declaration is invalid")
+	}
+
+	// Reset the body reader for decoding
+	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	// Decode the XML
 	if err := xml.NewDecoder(r.Body).Decode(v); err != nil {
 		return &HTTPError{http.StatusBadRequest, err}
 	}

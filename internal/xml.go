@@ -96,6 +96,17 @@ func (val *RawXMLValue) XMLName() (name xml.Name, ok bool) {
 	return xml.Name{}, false
 }
 
+// GetTextContent extracts the text content from the RawXMLValue's children.
+func (val *RawXMLValue) GetTextContent() string {
+	var result strings.Builder
+	for _, child := range val.children {
+		if charData, ok := child.tok.(xml.CharData); ok {
+			result.Write(charData)
+		}
+	}
+	return result.String()
+}
+
 // TokenReader returns a stream of tokens for the XML value.
 func (val *RawXMLValue) TokenReader() xml.TokenReader {
 	if val.out != nil {
@@ -166,6 +177,24 @@ func valueXMLName(v interface{}) (xml.Name, error) {
 	if tag == "" {
 		return xml.Name{}, fmt.Errorf(`webdav: %T.XMLName is missing an "xml" tag`, v)
 	}
+
+	// Handle special case for empty namespace
+	if tag == "," {
+		// This is a special case for properties with empty namespaces
+		// The XMLName field has a tag like `xml:","`
+		// Get the actual XMLName value from the struct instance
+		v := reflect.ValueOf(v)
+		for v.Kind() == reflect.Ptr {
+			v = v.Elem()
+		}
+		nameValue := v.FieldByName("XMLName")
+		if nameValue.IsValid() {
+			xmlName := nameValue.Interface().(xml.Name)
+			return xmlName, nil
+		}
+		return xml.Name{}, fmt.Errorf("webdav: could not get XMLName value from %T", v)
+	}
+
 	name := strings.Split(tag, ",")[0]
 	nameParts := strings.Split(name, " ")
 	if len(nameParts) != 2 {
