@@ -214,11 +214,29 @@ func (fs LocalFileSystem) Mkdir(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Mkdir(p, 0755); os.IsExist(err) {
-		return NewHTTPError(http.StatusMethodNotAllowed, err)
-	} else {
+
+	// Check if the path already exists
+	fi, statErr := os.Stat(p)
+	if statErr == nil {
+		// Path exists, check if it's a directory
+		if fi.IsDir() {
+			// If it's already a directory, return 405 Method Not Allowed (RFC4918:S9.1)
+			return NewHTTPError(http.StatusMethodNotAllowed, fmt.Errorf("collection already exists"))
+		} else {
+			// If it's not a directory, return 405 Method Not Allowed
+			return NewHTTPError(http.StatusMethodNotAllowed, fmt.Errorf("resource exists and is not a collection"))
+		}
+	} else if !os.IsNotExist(statErr) {
+		// Some other error occurred
+		return errFromOS(statErr)
+	}
+
+	// Path doesn't exist, create the directory
+	if err := os.Mkdir(p, 0755); err != nil {
 		return errFromOS(err)
 	}
+
+	return nil
 }
 
 func copyRegularFile(src, dst string, perm os.FileMode) error {
@@ -253,16 +271,23 @@ func (fs LocalFileSystem) Copy(ctx context.Context, src, dst string, options *Co
 		return false, err
 	}
 
-	// TODO: "Note that an infinite-depth COPY of /A/ into /A/B/ could lead to
-	// infinite recursion if not handled correctly"
-
+	// Check if source exists
 	srcInfo, err := os.Stat(srcPath)
 	if err != nil {
 		return false, errFromOS(err)
 	}
 	srcPerm := srcInfo.Mode() & os.ModePerm
 
-	if _, err := os.Stat(dstPath); err != nil {
+	// Check if destination parent directory exists
+	dstParent := filepath.Dir(dstPath)
+	if _, err := os.Stat(dstParent); os.IsNotExist(err) {
+		// Parent directory doesn't exist, return 409 Conflict as per RFC4918:S9.8.5
+		return false, NewHTTPError(http.StatusConflict, fmt.Errorf("destination parent collection doesn't exist"))
+	}
+
+	// Check if destination exists
+	_, err = os.Stat(dstPath)
+	if err != nil {
 		if !os.IsNotExist(err) {
 			return false, errFromOS(err)
 		}
@@ -276,28 +301,59 @@ func (fs LocalFileSystem) Copy(ctx context.Context, src, dst string, options *Co
 		}
 	}
 
-	err = filepath.Walk(srcPath, func(p string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	// If source is a directory, create the destination directory
+	if srcInfo.IsDir() {
+		if err := os.MkdirAll(dstPath, srcPerm); err != nil {
+			return false, errFromOS(err)
 		}
 
-		if fi.IsDir() {
-			if err := os.Mkdir(dstPath, srcPerm); err != nil {
-				return errFromOS(err)
-			}
-		} else {
-			if err := copyRegularFile(srcPath, dstPath, srcPerm); err != nil {
+		// If NoRecursive is true, we're done
+		if options.NoRecursive {
+			return created, nil
+		}
+
+		// Otherwise, copy the contents
+		err = filepath.Walk(srcPath, func(p string, fi os.FileInfo, err error) error {
+			if err != nil {
 				return err
 			}
-		}
 
-		if fi.IsDir() && options.NoRecursive {
-			return filepath.SkipDir
+			// Skip the root directory as we've already created it
+			if p == srcPath {
+				return nil
+			}
+
+			// Calculate the relative path from source root
+			relPath, err := filepath.Rel(srcPath, p)
+			if err != nil {
+				return err
+			}
+
+			// Create the corresponding path in the destination
+			dstItemPath := filepath.Join(dstPath, relPath)
+
+			if fi.IsDir() {
+				// Create directory
+				if err := os.MkdirAll(dstItemPath, fi.Mode()&os.ModePerm); err != nil {
+					return errFromOS(err)
+				}
+			} else {
+				// Copy file
+				if err := copyRegularFile(p, dstItemPath, fi.Mode()&os.ModePerm); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			return false, errFromOS(err)
 		}
-		return nil
-	})
-	if err != nil {
-		return false, errFromOS(err)
+	} else {
+		// Source is a file, just copy it
+		if err := copyRegularFile(srcPath, dstPath, srcPerm); err != nil {
+			return false, err
+		}
 	}
 
 	return created, nil
@@ -313,7 +369,22 @@ func (fs LocalFileSystem) Move(ctx context.Context, src, dst string, options *Mo
 		return false, err
 	}
 
-	if _, err := os.Stat(dstPath); err != nil {
+	// Check if source exists
+	_, err = os.Stat(srcPath)
+	if err != nil {
+		return false, errFromOS(err)
+	}
+
+	// Check if destination parent directory exists
+	dstParent := filepath.Dir(dstPath)
+	if _, err := os.Stat(dstParent); os.IsNotExist(err) {
+		// Parent directory doesn't exist, return 409 Conflict as per RFC4918
+		return false, NewHTTPError(http.StatusConflict, fmt.Errorf("destination parent collection doesn't exist"))
+	}
+
+	// Check if destination exists
+	_, err = os.Stat(dstPath)
+	if err != nil {
 		if !os.IsNotExist(err) {
 			return false, errFromOS(err)
 		}
@@ -327,7 +398,30 @@ func (fs LocalFileSystem) Move(ctx context.Context, src, dst string, options *Mo
 		}
 	}
 
-	if err := os.Rename(srcPath, dstPath); err != nil {
+	// Try to use os.Rename first, which is more efficient
+	err = os.Rename(srcPath, dstPath)
+	if err == nil {
+		return created, nil
+	}
+
+	// If os.Rename fails (e.g., cross-device move), fall back to copy and delete
+	// First, create a copy options with the same overwrite setting
+	copyOptions := &CopyOptions{
+		NoOverwrite: options.NoOverwrite,
+		NoRecursive: false, // Always recursive for move
+	}
+
+	// Copy the source to the destination
+	_, err = fs.Copy(ctx, src, dst, copyOptions)
+	if err != nil {
+		return false, err
+	}
+
+	// Remove the source
+	if err := os.RemoveAll(srcPath); err != nil {
+		// If we can't remove the source, we should try to remove the destination
+		// to maintain atomicity, but we'll still return the error from removing the source
+		os.RemoveAll(dstPath)
 		return false, errFromOS(err)
 	}
 
