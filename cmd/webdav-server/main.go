@@ -1,32 +1,26 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"log"
-	"net/http"
-	"os"
-
 	"github.com/Tryanks/fiber-webdav"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 func main() {
-	var addr string
-	flag.StringVar(&addr, "addr", ":8080", "listening address")
-	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [options...] [directory]\n", os.Args[0])
-		flag.PrintDefaults()
-	}
-	flag.Parse()
+	app := fiber.New(fiber.Config{
+		RequestMethods: webdav.ExtendedMethods,
+	})
+	app.Use(logger.New())
 
-	path := flag.Arg(0)
-	if path == "" {
-		path = "."
-	}
+	app.Use("/", webdav.New(webdav.Config{
+		Prefix: "/",
+		Root:   webdav.LocalFileSystem("."),
+		Lock:   true,
+	}))
 
-	handler := webdav.Handler{
-		FileSystem: webdav.LocalFileSystem(path),
+	err := app.Listen(":8080")
+	if err != nil {
+		log.Fatal(err)
 	}
-	log.Printf("WebDAV server listening on %v", addr)
-	log.Fatal(http.ListenAndServe(addr, &handler))
 }
