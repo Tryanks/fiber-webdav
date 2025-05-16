@@ -1,5 +1,8 @@
 # fiber-webdav
 
+> [!WARNING]
+> This project is not ready for production use. Do not use in production environments!
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/Tryanks/fiber-webdav.svg)](https://pkg.go.dev/github.com/Tryanks/fiber-webdav)
 
 A Go-Fiber library for [WebDAV]. Forked from [emersion/go-webdav](https://github.com/emersion/go-webdav).
